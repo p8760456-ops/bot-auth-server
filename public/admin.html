@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Panel - Bot Manager</title>
+  <style>
+    body {
+      background: #0d1117;
+      color: #f0f6fc;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
+    }
+    h1 {
+      color: #58a6ff;
+      font-size: 26px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #161b22;
+      margin-top: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #30363d;
+      text-align: left;
+    }
+    th {
+      background: #21262d;
+    }
+    button {
+      background: #238636;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: white;
+      font-weight: 500;
+      margin-right: 6px;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .danger {
+      background: #da3633;
+    }
+    .secondary {
+      background: #3b82f6;
+    }
+    input {
+      background: #161b22;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      border-radius: 5px;
+      padding: 6px 8px;
+    }
+    #status {
+      margin-top: 12px;
+      color: #ff7b72;
+      font-weight: 500;
+    }
+    #panel {
+      background: #161b22;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #0c0c0c;
+    }
+    .flex {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .section-title {
+      margin-top: 30px;
+      color: #79c0ff;
+      font-size: 20px;
+    }
+
+    /* 🔹 Modal Styles */
+    #modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      justify-content: center;
+      align-items: center;
+    }
+    #modalContent {
+      background: #161b22;
+      padding: 20px;
+      border-radius: 10px;
+      width: 350px;
+      box-shadow: 0 0 15px #000;
+    }
+    #modalContent h3 {
+      color: #58a6ff;
+      margin-bottom: 15px;
+    }
+    #modalContent input {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    #modalContent button {
+      width: 100%;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <!-- 🧩 Header with Logout -->
+    <div class="flex" style="justify-content: space-between; align-items: center;">
+      <h1>⚙️ Admin Panel — Bot Access Control</h1>
+      <button id="logout" class="danger" style="background:#da3633;">🔒 Logout</button>
+    </div>
+
+    <div class="flex" style="margin-top:10px;">
+      <button id="loadUsers" class="secondary">🔄 Load Users</button>
+      <button id="createUser">➕ Create User</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Can Run Bot</th>
+          <th>Machine ID</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2 class="section-title">🧑‍💼 Update Admin Credentials</h2>
+    <div class="flex">
+      <input id="adminUsername" placeholder="New admin username">
+      <input id="adminPassword" placeholder="New password" type="password">
+      <button id="updateAdmin" class="secondary">Update Admin</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <!-- 🔹 Modal for Creating User -->
+  <div id="modal">
+    <div id="modalContent">
+      <h3>➕ Create New User</h3>
+      <input id="newUsername" placeholder="Enter username">
+      <input id="newPassword" type="password" placeholder="Enter password">
+      <button id="saveUser">✅ Create</button>
+      <button id="cancelModal" class="danger">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+  const API = 'http://127.0.0.1:4000/api';
+  const token = new URLSearchParams(window.location.search).get('token');
+  const statusEl = document.getElementById('status');
+
+  console.log("✅ Admin panel script loaded");
+
+  async function loadUsers() {
+    try {
+      const res = await fetch(`${API}/users`, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      const tbody = document.querySelector('tbody');
+      tbody.innerHTML = '';
+      data.forEach(u => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${u.id}</td>
+          <td>${u.username}</td>
+          <td>${u.role === 'admin' ? '<b style="color:lime;">admin</b>' : '<b style="color:orange;">user</b>'}</td>
+          <td>${u.canRunBot ? '✅ Yes' : '❌ No'}</td>
+          <td>${u.machineId || '-'}</td>
+          <td>
+            <button onclick="toggleBot(${u.id})" class="secondary">${u.canRunBot ? 'Disable' : 'Enable'}</button>
+            ${u.role === 'admin'
+              ? `<button onclick="setRole(${u.id}, 'user')" class="secondary">Demote</button>`
+              : `<button onclick="setRole(${u.id}, 'admin')" class="secondary">Promote</button>`}
+            <button onclick="deleteUser(${u.id})" class="danger">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+      statusEl.textContent = '';
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = '❌ Failed to load users.';
+    }
+  }
+
+  async function toggleBot(id) {
+    await fetch(`${API}/users/${id}/toggle`, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    loadUsers();
+  }
+
+  async function setRole(id, role) {
+    await fetch(`${API}/users/${id}/role`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ role })
+    });
+    loadUsers();
+  }
+
+  async function deleteUser(id) {
+    await fetch(`${API}/users/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    loadUsers();
+  }
+
+  // ✅ Modal handling
+  const modal = document.getElementById('modal');
+  document.getElementById('createUser').addEventListener('click', () => {
+    console.log("🟩 Create User button clicked");
+    modal.style.display = 'flex';
+  });
+  document.getElementById('cancelModal').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+
+  document.getElementById('saveUser').addEventListener('click', async () => {
+    const username = document.getElementById('newUsername').value.trim();
+    const password = document.getElementById('newPassword').value.trim();
+    if (!username || !password) {
+      alert('⚠️ Both username and password are required!');
+      return;
+    }
+    statusEl.textContent = '⏳ Creating user...';
+    try {
+      const res = await fetch(`${API}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = `❌ Failed: ${data.error || 'unknown_error'}`;
+      } else {
+        statusEl.textContent = `✅ User "${data.username}" created successfully.`;
+        modal.style.display = 'none';
+        loadUsers();
+      }
+    } catch (err) {
+      console.error('❌ Network error:', err);
+      statusEl.textContent = '❌ Network error.';
+    }
+  });
+
+  // ✅ Update Admin Credentials
+  document.getElementById('updateAdmin').addEventListener('click', async () => {
+    const username = document.getElementById('adminUsername').value.trim();
+    const password = document.getElementById('adminPassword').value.trim();
+
+    if (!username && !password) {
+      statusEl.textContent = '⚠️ Nothing to update.';
+      return;
+    }
+
+    const res = await fetch(`${API}/admin/update`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (res.ok) {
+      statusEl.textContent = '✅ Admin updated successfully. Please re-login.';
+      localStorage.removeItem('adminToken');
+    } else {
+      const errData = await res.json();
+      statusEl.textContent = `❌ Failed to update admin. ${errData.error || ''}`;
+    }
+  });
+
+  // ✅ Logout Functionality
+  document.getElementById('logout').addEventListener('click', async () => {
+    if (!confirm('🔒 Are you sure you want to logout?')) return;
+    try {
+      await fetch(`${API}/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+    } catch (err) {
+      console.warn('⚠️ Logout request failed silently:', err.message);
+    }
+    localStorage.removeItem('adminToken');
+    statusEl.textContent = '👋 Logged out successfully. Closing window...';
+    setTimeout(() => window.close(), 1000);
+  });
+
+  document.getElementById('loadUsers').addEventListener('click', loadUsers);
+
+  // Load users automatically
+  loadUsers();
+  </script>
+</body>
+</html>
