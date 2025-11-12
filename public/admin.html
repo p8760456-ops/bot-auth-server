@@ -110,7 +110,6 @@
 </head>
 <body>
   <div id="panel">
-    <!-- 🧩 Header with Logout -->
     <div class="flex" style="justify-content: space-between; align-items: center;">
       <h1>⚙️ Admin Panel — Bot Access Control</h1>
       <button id="logout" class="danger" style="background:#da3633;">🔒 Logout</button>
@@ -157,30 +156,47 @@
   </div>
 
   <script>
-  const API = 'http://127.0.0.1:4000/api';
+  // 🌐 Automatically detect environment
+  const API =
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://127.0.0.1:4000/api'
+      : 'https://bot-auth-server-6wlg.onrender.com/api';
+
   const token = new URLSearchParams(window.location.search).get('token');
   const statusEl = document.getElementById('status');
 
   console.log("✅ Admin panel script loaded");
+  console.log("🌍 Using API:", API);
 
   async function loadUsers() {
     try {
       const res = await fetch(`${API}/users`, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Request failed');
+      }
+
       const data = await res.json();
       const tbody = document.querySelector('tbody');
       tbody.innerHTML = '';
+
       data.forEach(u => {
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${u.id}</td>
           <td>${u.username}</td>
-          <td>${u.role === 'admin' ? '<b style="color:lime;">admin</b>' : '<b style="color:orange;">user</b>'}</td>
+          <td>${u.role === 'admin'
+            ? '<b style="color:lime;">admin</b>'
+            : '<b style="color:orange;">user</b>'}</td>
           <td>${u.canRunBot ? '✅ Yes' : '❌ No'}</td>
           <td>${u.machineId || '-'}</td>
           <td>
-            <button onclick="toggleBot(${u.id})" class="secondary">${u.canRunBot ? 'Disable' : 'Enable'}</button>
+            <button onclick="toggleBot(${u.id})" class="secondary">
+              ${u.canRunBot ? 'Disable' : 'Enable'}
+            </button>
             ${u.role === 'admin'
               ? `<button onclick="setRole(${u.id}, 'user')" class="secondary">Demote</button>`
               : `<button onclick="setRole(${u.id}, 'admin')" class="secondary">Promote</button>`}
@@ -189,45 +205,57 @@
         `;
         tbody.appendChild(row);
       });
+
       statusEl.textContent = '';
     } catch (err) {
-      console.error(err);
-      statusEl.textContent = '❌ Failed to load users.';
+      console.error('❌ Failed to load users:', err);
+      statusEl.textContent = '❌ Failed to load users. ' + err.message;
     }
   }
 
   async function toggleBot(id) {
-    await fetch(`${API}/users/${id}/toggle`, {
-      method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    loadUsers();
+    try {
+      await fetch(`${API}/users/${id}/toggle`, {
+        method: 'PUT',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      loadUsers();
+    } catch (err) {
+      statusEl.textContent = '❌ Failed to toggle user.';
+    }
   }
 
   async function setRole(id, role) {
-    await fetch(`${API}/users/${id}/role`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
-      },
-      body: JSON.stringify({ role })
-    });
-    loadUsers();
+    try {
+      await fetch(`${API}/users/${id}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ role })
+      });
+      loadUsers();
+    } catch (err) {
+      statusEl.textContent = '❌ Failed to update role.';
+    }
   }
 
   async function deleteUser(id) {
-    await fetch(`${API}/users/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    loadUsers();
+    try {
+      await fetch(`${API}/users/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      loadUsers();
+    } catch (err) {
+      statusEl.textContent = '❌ Failed to delete user.';
+    }
   }
 
-  // ✅ Modal handling
+  // 🔹 Modal handling
   const modal = document.getElementById('modal');
   document.getElementById('createUser').addEventListener('click', () => {
-    console.log("🟩 Create User button clicked");
     modal.style.display = 'flex';
   });
   document.getElementById('cancelModal').addEventListener('click', () => {
@@ -241,6 +269,7 @@
       alert('⚠️ Both username and password are required!');
       return;
     }
+
     statusEl.textContent = '⏳ Creating user...';
     try {
       const res = await fetch(`${API}/users`, {
@@ -251,6 +280,7 @@
         },
         body: JSON.stringify({ username, password })
       });
+
       const data = await res.json();
       if (!res.ok) {
         statusEl.textContent = `❌ Failed: ${data.error || 'unknown_error'}`;
@@ -261,11 +291,11 @@
       }
     } catch (err) {
       console.error('❌ Network error:', err);
-      statusEl.textContent = '❌ Network error.';
+      statusEl.textContent = '❌ Network error. Check connection or Render server.';
     }
   });
 
-  // ✅ Update Admin Credentials
+  // 🔹 Update Admin Credentials
   document.getElementById('updateAdmin').addEventListener('click', async () => {
     const username = document.getElementById('adminUsername').value.trim();
     const password = document.getElementById('adminPassword').value.trim();
@@ -275,25 +305,28 @@
       return;
     }
 
-    const res = await fetch(`${API}/admin/update`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
-      },
-      body: JSON.stringify({ username, password })
-    });
+    try {
+      const res = await fetch(`${API}/admin/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ username, password })
+      });
 
-    if (res.ok) {
-      statusEl.textContent = '✅ Admin updated successfully. Please re-login.';
-      localStorage.removeItem('adminToken');
-    } else {
-      const errData = await res.json();
-      statusEl.textContent = `❌ Failed to update admin. ${errData.error || ''}`;
+      if (res.ok) {
+        statusEl.textContent = '✅ Admin updated successfully. Please re-login.';
+      } else {
+        const errData = await res.json();
+        statusEl.textContent = `❌ Failed to update admin. ${errData.error || ''}`;
+      }
+    } catch (err) {
+      statusEl.textContent = '❌ Network error while updating admin.';
     }
   });
 
-  // ✅ Logout Functionality
+  // 🔹 Logout Functionality
   document.getElementById('logout').addEventListener('click', async () => {
     if (!confirm('🔒 Are you sure you want to logout?')) return;
     try {
@@ -304,14 +337,13 @@
     } catch (err) {
       console.warn('⚠️ Logout request failed silently:', err.message);
     }
-    localStorage.removeItem('adminToken');
     statusEl.textContent = '👋 Logged out successfully. Closing window...';
     setTimeout(() => window.close(), 1000);
   });
 
   document.getElementById('loadUsers').addEventListener('click', loadUsers);
 
-  // Load users automatically
+  // Load users automatically on page load
   loadUsers();
   </script>
 </body>
