@@ -1,54 +1,54 @@
 // database.js
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
-const fs = require('fs');
 
-// Path for persistent storage on Render
-const DB_PATH = process.env.NODE_ENV === 'production'
-  ? '/data/users.db'       // Render persistent disk
-  : 'users.db';            // Local development
+if (!process.env.DATABASE_URL) {
+  console.error('ERROR: DATABASE_URL not set in environment.');
+  process.exit(1);
+}
 
-console.log('📌 Using SQLite DB at:', DB_PATH);
-
-const db = new sqlite3.Database(DB_PATH);
-
-// Initialize schema + seed admin
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin','user')),
-      canRunBot INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  const adminUser = 'admin';
-  const adminPass = '12345';
-  const adminHash = bcrypt.hashSync(adminPass, 10);
-
-  db.get(`SELECT * FROM users WHERE username = ?`, [adminUser], (err, row) => {
-    if (err) {
-      console.error('DB error:', err);
-      return;
-    }
-
-    if (!row) {
-      console.log('👑 Seeding default admin user...');
-      db.run(
-        `INSERT INTO users (username, password_hash, role, canRunBot)
-         VALUES (?, ?, 'admin', 1)`,
-        [adminUser, adminHash],
-        (err2) => {
-          if (err2) console.error('Admin seed error:', err2);
-        }
-      );
-    } else {
-      console.log('👑 Admin already exists ✔');
-    }
-  });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-module.exports = db;
+async function initDB() {
+  // Create users table if not exists
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin','user')),
+      canRunBot BOOLEAN DEFAULT false,
+      machine_id TEXT,
+      active_token TEXT,
+      last_heartbeat TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  // Seed admin if missing
+  const adminUser = process.env.ADMIN_USER || 'yigewo001';
+  const adminPass = process.env.ADMIN_PASS || 'Localhost01@';
+  const hashed = bcrypt.hashSync(adminPass, 10);
+
+  const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [adminUser]);
+  if (rows.length === 0) {
+    console.log('👑 Creating default admin user...');
+    await pool.query(
+      `INSERT INTO users (username, password_hash, role, canRunBot)
+       VALUES ($1, $2, 'admin', true)`,
+      [adminUser, hashed]
+    );
+  } else {
+    console.log('👑 Admin already exists ✔');
+  }
+}
+
+initDB().catch(err => {
+  console.error('Database initialization error:', err);
+  process.exit(1);
+});
+
+module.exports = pool;
