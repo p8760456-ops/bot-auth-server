@@ -160,7 +160,7 @@ app.put('/api/admin/update', authAdmin, async (req, res) => {
 
 // Fallback: return index.html for admin UI if single-page app
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 // Start server
