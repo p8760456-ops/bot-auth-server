@@ -42,8 +42,8 @@ db.serialize(() => {
     )
   `);
 
-  const adminUser = process.env.ADMIN_USER || 'admin';
-  const adminPass = process.env.ADMIN_PASS || 'Admin@123';
+  const adminUser = process.env.ADMIN_USER || 'yigewo001';
+  const adminPass = process.env.ADMIN_PASS || 'Localhost01@';
 
   db.get(`SELECT * FROM users WHERE username = ?`, [adminUser], (err, row) => {
     if (!row) {
