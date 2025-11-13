@@ -5,8 +5,8 @@ const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3').verbose();
 
 const DB_FILE = path.join(__dirname, 'users.db'); // common filename; if yours is different, edit
-const ADMIN_USERNAME = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASS || 'Admin@123';
+const ADMIN_USERNAME = process.env.ADMIN_USER || 'yigewo001';
+const ADMIN_PASSWORD = process.env.ADMIN_PASS || 'Localhost01@';
 
 console.log('Using DB file:', DB_FILE);
 
